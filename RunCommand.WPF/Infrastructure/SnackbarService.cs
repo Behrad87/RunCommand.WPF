@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using MaterialDesignThemes.Wpf;
 
@@ -12,27 +13,62 @@ namespace RunCommand.WPF.Infrastructure
 
         public static void Initialize(SnackbarMessageQueue queue) => _queue = queue;
 
-        public static void ShowSuccess(string message) => Enqueue(message, TimeSpan.FromSeconds(4));
+        /// <summary>Temporarily route snackbars to another queue (e.g. a modal dialog).</summary>
+        public static SnackbarMessageQueue? UseQueue(SnackbarMessageQueue queue)
+        {
+            var previous = _queue;
+            _queue = queue;
+            return previous;
+        }
 
-        public static void ShowError(string message) => Enqueue(message, TimeSpan.FromSeconds(8));
+        public static void RestoreQueue(SnackbarMessageQueue? queue) => _queue = queue;
 
-        public static void ShowInfo(string message) => Enqueue(message, TimeSpan.FromSeconds(5));
+        public static void ShowSuccess(string message) =>
+            Enqueue(message, PackIconKind.CheckCircle, TimeSpan.FromSeconds(4));
 
-        private static void Enqueue(string message, TimeSpan duration)
+        public static void ShowError(string message) =>
+            Enqueue(message, PackIconKind.AlertCircle, TimeSpan.FromSeconds(8));
+
+        public static void ShowInfo(string message) =>
+            Enqueue(message, PackIconKind.Information, TimeSpan.FromSeconds(5));
+
+        private static void Enqueue(string message, PackIconKind icon, TimeSpan duration)
         {
             if (_queue is null || string.IsNullOrWhiteSpace(message))
                 return;
 
+            void Show()
+            {
+                var queue = _queue;
+                if (queue is null) return;
+
+                var content = new StackPanel { Orientation = Orientation.Horizontal };
+                content.Children.Add(new PackIcon
+                {
+                    Kind = icon,
+                    Width = 20,
+                    Height = 20,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 10, 0)
+                });
+                content.Children.Add(new TextBlock
+                {
+                    Text = message,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextWrapping = TextWrapping.Wrap
+                });
+
+                queue.Enqueue(content, null, null, null, false, true, duration);
+            }
+
             var dispatcher = Application.Current?.Dispatcher;
             if (dispatcher is null || dispatcher.CheckAccess())
             {
-                _queue.Enqueue(message, null, null, null, false, true, duration);
+                Show();
                 return;
             }
 
-            dispatcher.BeginInvoke(() =>
-                _queue.Enqueue(message, null, null, null, false, true, duration),
-                DispatcherPriority.Normal);
+            dispatcher.BeginInvoke(Show, DispatcherPriority.Normal);
         }
     }
 }

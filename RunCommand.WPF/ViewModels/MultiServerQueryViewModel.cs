@@ -10,6 +10,7 @@ using System.Windows.Data;
 using RunCommand.WPF.Infrastructure;
 using RunCommand.WPF.Models;
 using RunCommand.WPF.Services;
+using static RunCommand.WPF.Infrastructure.SnackbarService;
 
 namespace RunCommand.WPF.ViewModels
 {
@@ -106,31 +107,64 @@ namespace RunCommand.WPF.ViewModels
 
         private async Task LoadAsync()
         {
-            var all = await _store.GetAllAsync();
-            foreach (var s in all)
-                Servers.Add(new ServerItemViewModel(s));
-            StatusMessage = $"Loaded {Servers.Count} servers.";
+            try
+            {
+                var all = await _store.GetAllAsync();
+                foreach (var s in all)
+                    Servers.Add(new ServerItemViewModel(s));
+                StatusMessage = $"Loaded {Servers.Count} servers.";
+                if (Servers.Count > 0)
+                    ShowSuccess($"Loaded {Servers.Count} server(s).");
+            }
+            catch (Exception ex)
+            {
+                ReportError("Failed to load servers", ex);
+            }
         }
 
         public async Task AddOrUpdateServerAsync(ServerConnectionInfo info)
         {
-            await _store.UpsertAsync(info);
-            var existing = Servers.FirstOrDefault(s => s.Info.Id == info.Id);
-            if (existing == null)
-                Servers.Add(new ServerItemViewModel(info));
-            else
-                existing.RefreshFromModel();
+            try
+            {
+                await _store.UpsertAsync(info);
+                var existing = Servers.FirstOrDefault(s => s.Info.Id == info.Id);
+                if (existing == null)
+                {
+                    Servers.Add(new ServerItemViewModel(info));
+                    ShowSuccess($"Added server \"{info.Name}\".");
+                }
+                else
+                {
+                    existing.RefreshFromModel();
+                    ShowSuccess($"Updated server \"{info.Name}\".");
+                }
+            }
+            catch (Exception ex)
+            {
+                ReportError($"Failed to save server \"{info.Name}\"", ex);
+                throw;
+            }
         }
 
         private async Task RemoveSelectedAsync()
         {
             var toRemove = Servers.Where(s => s.IsSelected).ToList();
-            foreach (var s in toRemove)
+            if (toRemove.Count == 0) return;
+
+            try
             {
-                await _store.DeleteAsync(s.Info.Id);
-                Servers.Remove(s);
+                foreach (var s in toRemove)
+                {
+                    await _store.DeleteAsync(s.Info.Id);
+                    Servers.Remove(s);
+                }
+                StatusMessage = $"Removed {toRemove.Count} server(s).";
+                ShowSuccess($"Removed {toRemove.Count} server(s).");
             }
-            StatusMessage = $"Removed {toRemove.Count} server(s).";
+            catch (Exception ex)
+            {
+                ReportError("Failed to remove selected servers", ex);
+            }
         }
 
         private void ToggleSelectAll()
@@ -177,15 +211,31 @@ namespace RunCommand.WPF.ViewModels
                 await _healthChecker.CheckAllAsync(
                     targets.Select(t => t.Info), MaxConcurrency, progress, _cts.Token);
             }
-            catch (OperationCanceledException) { /* user cancelled */ }
+            catch (OperationCanceledException)
+            {
+                ShowInfo("Status check cancelled.");
+            }
+            catch (Exception ex)
+            {
+                ReportError("Status check failed", ex);
+            }
             finally
             {
                 foreach (var t in targets) t.RefreshFromModel();
-                await _store.UpdateStatusBatchAsync(targets.Select(t => t.Info));
+                try
+                {
+                    await _store.UpdateStatusBatchAsync(targets.Select(t => t.Info));
+                }
+                catch (Exception ex)
+                {
+                    ReportError("Failed to save status results", ex);
+                }
 
                 var online = targets.Count(t => t.Status == ServerStatus.Online);
                 var offline = targets.Count(t => t.Status == ServerStatus.Offline);
                 StatusMessage = $"Status check complete: {online} online, {offline} offline.";
+                if (!(_cts?.IsCancellationRequested ?? false))
+                    ShowSuccess($"Status check complete: {online} online, {offline} offline.");
                 IsBusy = false;
             }
         }
@@ -225,12 +275,28 @@ namespace RunCommand.WPF.ViewModels
                     progress,
                     _cts.Token);
             }
-            catch (OperationCanceledException) { /* user cancelled */ }
+            catch (OperationCanceledException)
+            {
+                ShowInfo("Query cancelled.");
+            }
+            catch (Exception ex)
+            {
+                ReportError("Query execution failed", ex);
+            }
             finally
             {
                 var ok = Results.Count(r => r.Success);
                 var failed = Results.Count(r => !r.Success);
                 StatusMessage = $"Query finished: {ok} succeeded, {failed} failed.";
+                if (!(_cts?.IsCancellationRequested ?? false))
+                {
+                    if (failed == 0)
+                        ShowSuccess($"Query finished: {ok} succeeded.");
+                    else if (ok == 0)
+                        ShowError($"Query finished: all {failed} server(s) failed.");
+                    else
+                        ShowInfo($"Query finished: {ok} succeeded, {failed} failed.");
+                }
                 IsBusy = false;
             }
         }
@@ -243,6 +309,15 @@ namespace RunCommand.WPF.ViewModels
             CheckAllStatusCommand.RaiseCanExecuteChanged();
             RunQueryCommand.RaiseCanExecuteChanged();
             CancelCommand.RaiseCanExecuteChanged();
+        }
+
+        private void ReportError(string context, Exception ex)
+        {
+            var message = ex is AggregateException agg && agg.InnerException is not null
+                ? $"{context}: {agg.InnerException.Message}"
+                : $"{context}: {ex.Message}";
+            StatusMessage = message;
+            ShowError(message);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

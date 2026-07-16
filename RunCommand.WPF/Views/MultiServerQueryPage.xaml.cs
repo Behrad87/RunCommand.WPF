@@ -1,3 +1,5 @@
+using System;
+using System.Windows;
 using System.Windows.Controls;
 using RunCommand.WPF.Infrastructure;
 using RunCommand.WPF.ViewModels;
@@ -12,7 +14,7 @@ namespace RunCommand.WPF.Views
         {
             InitializeComponent();
 
-            var store = new LocalServerStore(); // defaults to %AppData%\MultiServerQueryTool\servers.db
+            var store = new LocalServerStore();
             _vm = new MultiServerQueryViewModel(store);
             _vm.OnRequestAddServer += ShowAddServerDialog;
             DataContext = _vm;
@@ -20,11 +22,18 @@ namespace RunCommand.WPF.Views
 
         private async void ShowAddServerDialog()
         {
-            var dialog = new AddServerDialog();
-            if (dialog.ShowDialog() == true)
+            try
             {
-                foreach (var server in dialog.Results)
-                    await _vm.AddOrUpdateServerAsync(server);
+                var dialog = new AddServerDialog { Owner = Window.GetWindow(this) };
+                if (dialog.ShowDialog() == true)
+                {
+                    foreach (var server in dialog.Results)
+                        await _vm.AddOrUpdateServerAsync(server);
+                }
+            }
+            catch (Exception ex)
+            {
+                SnackbarService.ShowError($"Failed to add server(s): {ex.Message}");
             }
         }
     }

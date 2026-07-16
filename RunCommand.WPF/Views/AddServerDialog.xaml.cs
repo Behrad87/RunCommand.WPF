@@ -7,9 +7,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
+using MaterialDesignThemes.Wpf;
 using RunCommand.WPF.Infrastructure;
 using RunCommand.WPF.Models;
 using RunCommand.WPF.Services;
+using static RunCommand.WPF.Infrastructure.SnackbarService;
 
 namespace RunCommand.WPF.Views
 {
@@ -19,6 +21,7 @@ namespace RunCommand.WPF.Views
         public System.Collections.Generic.List<ServerConnectionInfo> Results { get; } = new();
 
         private readonly ServerHealthChecker _healthChecker = new();
+        private SnackbarMessageQueue? _restoredQueue;
         public ObservableCollection<ParsedEntry> ParsedEntries { get; } = new();
 
         public AddServerDialog()
@@ -26,6 +29,11 @@ namespace RunCommand.WPF.Views
             InitializeComponent();
             AuthModeChanged(this, null!);
             ParsedList.ItemsSource = ParsedEntries;
+
+            var dialogQueue = new SnackbarMessageQueue(TimeSpan.FromSeconds(4));
+            DialogSnackbar.MessageQueue = dialogQueue;
+            _restoredQueue = SnackbarService.UseQueue(dialogQueue);
+            Closed += (_, _) => SnackbarService.RestoreQueue(_restoredQueue);
         }
 
         // ===================== Manual entry tab =====================
@@ -33,9 +41,7 @@ namespace RunCommand.WPF.Views
         private void AuthModeChanged(object sender, RoutedEventArgs e)
         {
             bool windowsAuth = WindowsAuthCheck.IsChecked == true;
-            UserLabel.Visibility = windowsAuth ? Visibility.Collapsed : Visibility.Visible;
             UserBox.Visibility = windowsAuth ? Visibility.Collapsed : Visibility.Visible;
-            PassLabel.Visibility = windowsAuth ? Visibility.Collapsed : Visibility.Visible;
             PassBox.Visibility = windowsAuth ? Visibility.Collapsed : Visibility.Visible;
         }
 
@@ -53,36 +59,51 @@ namespace RunCommand.WPF.Views
 
         private async void TestConnection_Click(object sender, RoutedEventArgs e)
         {
-            var candidate = BuildFromForm();
-
-            TestDot.Fill = new SolidColorBrush(Color.FromRgb(0xE8, 0xA6, 0x1E)); // amber while checking
-            TestResultText.Text = "Testing connection...";
-
-            await _healthChecker.CheckOneAsync(candidate, default);
-
-            (Brush fill, string message) = candidate.Status switch
+            try
             {
-                ServerStatus.Online => (new SolidColorBrush(Color.FromRgb(0x2E, 0xA0, 0x4A)),
-                    $"Online - {candidate.LastResponseTimeMs} ms"),
-                ServerStatus.AuthFailed => (new SolidColorBrush(Color.FromRgb(0xE8, 0x6A, 0x1E)),
-                    $"Reachable but login failed: {candidate.LastError}"),
-                _ => (new SolidColorBrush(Color.FromRgb(0xD9, 0x33, 0x33)),
-                    $"Down / unreachable: {candidate.LastError}")
-            };
+                var candidate = BuildFromForm();
 
-            TestDot.Fill = fill;
-            TestResultText.Text = message;
+                TestDot.Fill = new SolidColorBrush(Color.FromRgb(0xE8, 0xA6, 0x1E));
+                TestResultText.Text = "Testing connection...";
+
+                await _healthChecker.CheckOneAsync(candidate, default);
+
+                (Brush fill, string message) = candidate.Status switch
+                {
+                    ServerStatus.Online => (new SolidColorBrush(Color.FromRgb(0x2E, 0xA0, 0x4A)),
+                        $"Online - {candidate.LastResponseTimeMs} ms"),
+                    ServerStatus.AuthFailed => (new SolidColorBrush(Color.FromRgb(0xE8, 0x6A, 0x1E)),
+                        $"Reachable but login failed: {candidate.LastError}"),
+                    _ => (new SolidColorBrush(Color.FromRgb(0xD9, 0x33, 0x33)),
+                        $"Down / unreachable: {candidate.LastError}")
+                };
+
+                TestDot.Fill = fill;
+                TestResultText.Text = message;
+
+                if (candidate.Status == ServerStatus.Online)
+                    ShowSuccess(message);
+                else
+                    ShowError(message);
+            }
+            catch (Exception ex)
+            {
+                TestDot.Fill = new SolidColorBrush(Color.FromRgb(0xD9, 0x33, 0x33));
+                TestResultText.Text = ex.Message;
+                ShowError($"Connection test failed: {ex.Message}");
+            }
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(NameBox.Text) || string.IsNullOrWhiteSpace(HostBox.Text))
             {
-                MessageBox.Show("Name and Host are required.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowError("Name and Host are required.");
                 return;
             }
 
             Results.Add(BuildFromForm());
+            ShowSuccess("Server saved.");
             DialogResult = true;
         }
 
@@ -159,8 +180,7 @@ namespace RunCommand.WPF.Views
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Could not read that file:\n{ex.Message}", "Import failed",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                ShowError($"Could not read that file: {ex.Message}");
                 return;
             }
 
@@ -169,8 +189,7 @@ namespace RunCommand.WPF.Views
 
             if (parsed.Count == 0)
             {
-                MessageBox.Show("No rows found in that CSV file.", "Import",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowError("No rows found in that CSV file.");
                 return;
             }
 
@@ -193,36 +212,63 @@ namespace RunCommand.WPF.Views
 
             var validCount = parsed.Count(x => x.Info != null);
             var invalidCount = parsed.Count - validCount;
-            MessageBox.Show($"Imported {validCount} valid row(s) from {System.IO.Path.GetFileName(dialog.FileName)}." +
-                             (invalidCount > 0 ? $"\n{invalidCount} row(s) could not be parsed - see the Message column." : ""),
-                "Import complete", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (invalidCount > 0)
+                ShowInfo($"Imported {validCount} valid row(s). {invalidCount} row(s) could not be parsed.");
+            else
+                ShowSuccess($"Imported {validCount} row(s) from {System.IO.Path.GetFileName(dialog.FileName)}.");
         }
 
         private async void TestAll_Click(object sender, RoutedEventArgs e)
         {
-            var throttle = new SemaphoreSlim(10);
-            var tasks = ParsedEntries.Where(x => x.Info != null).Select(async entry =>
+            var entries = ParsedEntries.Where(x => x.Info != null).ToList();
+            if (entries.Count == 0)
             {
-                await throttle.WaitAsync();
-                try
-                {
-                    entry.Status = ServerStatus.Checking;
-                    await _healthChecker.CheckOneAsync(entry.Info!, CancellationToken.None);
-                    entry.Status = entry.Info!.Status;
-                    entry.Message = entry.Info.Status switch
-                    {
-                        ServerStatus.Online => $"Online - {entry.Info.LastResponseTimeMs} ms",
-                        ServerStatus.AuthFailed => $"Login failed: {entry.Info.LastError}",
-                        _ => $"Down: {entry.Info.LastError}"
-                    };
-                }
-                finally
-                {
-                    throttle.Release();
-                }
-            });
+                ShowError("No valid connection strings to test.");
+                return;
+            }
 
-            await Task.WhenAll(tasks);
+            try
+            {
+                var throttle = new SemaphoreSlim(10);
+                var tasks = entries.Select(async entry =>
+                {
+                    await throttle.WaitAsync();
+                    try
+                    {
+                        entry.Status = ServerStatus.Checking;
+                        await _healthChecker.CheckOneAsync(entry.Info!, CancellationToken.None);
+                        entry.Status = entry.Info!.Status;
+                        entry.Message = entry.Info.Status switch
+                        {
+                            ServerStatus.Online => $"Online - {entry.Info.LastResponseTimeMs} ms",
+                            ServerStatus.AuthFailed => $"Login failed: {entry.Info.LastError}",
+                            _ => $"Down: {entry.Info.LastError}"
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        entry.Status = ServerStatus.Offline;
+                        entry.Message = ex.Message;
+                    }
+                    finally
+                    {
+                        throttle.Release();
+                    }
+                });
+
+                await Task.WhenAll(tasks);
+
+                var online = entries.Count(e => e.Status == ServerStatus.Online);
+                var failed = entries.Count - online;
+                if (failed == 0)
+                    ShowSuccess($"All {online} connection(s) are online.");
+                else
+                    ShowInfo($"Test complete: {online} online, {failed} failed.");
+            }
+            catch (Exception ex)
+            {
+                ShowError($"Bulk connection test failed: {ex.Message}");
+            }
         }
 
         private void AddAll_Click(object sender, RoutedEventArgs e)
@@ -230,12 +276,12 @@ namespace RunCommand.WPF.Views
             var valid = ParsedEntries.Where(x => x.Info != null).Select(x => x.Info!).ToList();
             if (valid.Count == 0)
             {
-                MessageBox.Show("No valid connection strings to add. Paste a line or import a CSV file first.", "Nothing to add",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowError("No valid connection strings to add. Paste a line or import a CSV file first.");
                 return;
             }
 
             Results.AddRange(valid);
+            ShowSuccess($"Added {valid.Count} server(s).");
             DialogResult = true;
         }
 
