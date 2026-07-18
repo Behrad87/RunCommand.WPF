@@ -8,18 +8,54 @@
     <Page.Resources>
         <conv:StatusToBrushConverter x:Key="StatusToBrush"/>
 
-        <!-- Explicit checkbox style: MD checkboxes in DataGrid cells often render invisible. -->
-        <Style x:Key="GridCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource MaterialDesignCheckBox}">
+        <!-- High-contrast grid checkbox: MD checked fill matches selected-row primary and disappears. -->
+        <Style x:Key="GridCheckBoxStyle" TargetType="CheckBox">
             <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="0"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Primary}"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesign.Brush.Foreground}"/>
-            <Setter Property="Opacity" Value="1"/>
-            <Setter Property="Visibility" Value="Visible"/>
-            <Setter Property="materialDesign:CheckBoxAssist.CheckBoxSize" Value="18"/>
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="Height" Value="18"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Border x:Name="Box"
+                                Width="18" Height="18"
+                                CornerRadius="3"
+                                Background="#FFFFFF"
+                                BorderBrush="#6750A4"
+                                BorderThickness="2"
+                                SnapsToDevicePixels="True">
+                            <Path x:Name="Check"
+                                  Data="M3,9 L7,13 L15,4"
+                                  Stroke="#FFFFFF"
+                                  StrokeThickness="2.2"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round"
+                                  Width="16" Height="16"
+                                  Stretch="None"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Visibility="Collapsed"
+                                  Margin="0,1,0,0"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Box" Property="Background" Value="#00897B"/>
+                                <Setter TargetName="Box" Property="BorderBrush" Value="#00695C"/>
+                                <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Box" Property="BorderBrush" Value="#00897B"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Box" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- SSMS / Azure Data Studio–style SQL editor surface -->
