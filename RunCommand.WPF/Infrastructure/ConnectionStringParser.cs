@@ -1,6 +1,5 @@
 using System;
 using Microsoft.Data.SqlClient;
-
 using RunCommand.WPF.Models;
 
 namespace RunCommand.WPF.Infrastructure
@@ -29,6 +28,9 @@ namespace RunCommand.WPF.Infrastructure
                 UseWindowsAuth = builder.IntegratedSecurity,
                 UserName = builder.IntegratedSecurity ? null : builder.UserID,
                 EncryptedPassword = builder.IntegratedSecurity ? null : SecureStringHelper.Protect(builder.Password),
+                RememberPassword = !builder.IntegratedSecurity && !string.IsNullOrEmpty(builder.Password),
+                Encrypt = builder.Encrypt.ToString(),
+                TrustServerCertificate = builder.TrustServerCertificate,
             };
 
             // Strip the password out of the stored connection string - it's re-applied

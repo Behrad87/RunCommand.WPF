@@ -12,7 +12,10 @@ namespace RunCommand.WPF
         {
             InitializeComponent();
 
-            SnackbarService.Initialize(AppSnackbar.MessageQueue ?? new SnackbarMessageQueue(TimeSpan.FromSeconds(4)));
+            // Must assign the queue to the Snackbar control - otherwise messages enqueue to a disconnected queue.
+            AppSnackbar.MessageQueue ??= new SnackbarMessageQueue(TimeSpan.FromSeconds(4));
+            SnackbarService.Initialize(AppSnackbar.MessageQueue);
+
             MainFrame.Navigate(new MultiServerQueryPage());
         }
     }

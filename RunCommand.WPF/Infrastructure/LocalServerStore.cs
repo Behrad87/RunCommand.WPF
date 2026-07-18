@@ -50,17 +50,27 @@ namespace RunCommand.WPF.Infrastructure
                     LastCheckedUtc TEXT,
                     LastResponseTimeMs INTEGER,
                     LastError TEXT,
-                    RawConnectionString TEXT
+                    RawConnectionString TEXT,
+                    Encrypt TEXT NOT NULL DEFAULT 'Mandatory',
+                    TrustServerCertificate INTEGER NOT NULL DEFAULT 1,
+                    RememberPassword INTEGER NOT NULL DEFAULT 1
                 );
                 CREATE INDEX IF NOT EXISTS IX_Servers_Group ON Servers("Group");
                 """;
             cmd.ExecuteNonQuery();
 
-            // Migration for DBs created before RawConnectionString existed.
+            TryAddColumn(conn, "RawConnectionString TEXT");
+            TryAddColumn(conn, "Encrypt TEXT NOT NULL DEFAULT 'Mandatory'");
+            TryAddColumn(conn, "TrustServerCertificate INTEGER NOT NULL DEFAULT 1");
+            TryAddColumn(conn, "RememberPassword INTEGER NOT NULL DEFAULT 1");
+        }
+
+        private static void TryAddColumn(SqliteConnection conn, string columnDef)
+        {
             try
             {
                 var alter = conn.CreateCommand();
-                alter.CommandText = "ALTER TABLE Servers ADD COLUMN RawConnectionString TEXT;";
+                alter.CommandText = $"ALTER TABLE Servers ADD COLUMN {columnDef};";
                 alter.ExecuteNonQuery();
             }
             catch (SqliteException)
@@ -92,15 +102,18 @@ namespace RunCommand.WPF.Infrastructure
             cmd.CommandText = """
                 INSERT INTO Servers
                     (Id, Name, HostName, Port, DatabaseName, "Group", UseWindowsAuth, UserName,
-                     EncryptedPassword, IsEnabled, Status, LastCheckedUtc, LastResponseTimeMs, LastError, RawConnectionString)
+                     EncryptedPassword, IsEnabled, Status, LastCheckedUtc, LastResponseTimeMs, LastError,
+                     RawConnectionString, Encrypt, TrustServerCertificate, RememberPassword)
                 VALUES
                     ($Id, $Name, $HostName, $Port, $DatabaseName, $Group, $UseWindowsAuth, $UserName,
-                     $EncryptedPassword, $IsEnabled, $Status, $LastCheckedUtc, $LastResponseTimeMs, $LastError, $RawConnectionString)
+                     $EncryptedPassword, $IsEnabled, $Status, $LastCheckedUtc, $LastResponseTimeMs, $LastError,
+                     $RawConnectionString, $Encrypt, $TrustServerCertificate, $RememberPassword)
                 ON CONFLICT(Id) DO UPDATE SET
                     Name=$Name, HostName=$HostName, Port=$Port, DatabaseName=$DatabaseName, "Group"=$Group,
                     UseWindowsAuth=$UseWindowsAuth, UserName=$UserName, EncryptedPassword=$EncryptedPassword,
                     IsEnabled=$IsEnabled, Status=$Status, LastCheckedUtc=$LastCheckedUtc,
-                    LastResponseTimeMs=$LastResponseTimeMs, LastError=$LastError, RawConnectionString=$RawConnectionString;
+                    LastResponseTimeMs=$LastResponseTimeMs, LastError=$LastError, RawConnectionString=$RawConnectionString,
+                    Encrypt=$Encrypt, TrustServerCertificate=$TrustServerCertificate, RememberPassword=$RememberPassword;
                 """;
             Bind(cmd, server);
             await cmd.ExecuteNonQueryAsync();
@@ -164,6 +177,9 @@ namespace RunCommand.WPF.Infrastructure
             cmd.Parameters.AddWithValue("$LastResponseTimeMs", (object?)s.LastResponseTimeMs ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$LastError", (object?)s.LastError ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$RawConnectionString", (object?)s.RawConnectionString ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$Encrypt", s.Encrypt);
+            cmd.Parameters.AddWithValue("$TrustServerCertificate", s.TrustServerCertificate ? 1 : 0);
+            cmd.Parameters.AddWithValue("$RememberPassword", s.RememberPassword ? 1 : 0);
         }
 
         private static ServerConnectionInfo Map(SqliteDataReader r) => new()
@@ -183,6 +199,20 @@ namespace RunCommand.WPF.Infrastructure
             LastResponseTimeMs = r.IsDBNull(r.GetOrdinal("LastResponseTimeMs")) ? null : r.GetInt64(r.GetOrdinal("LastResponseTimeMs")),
             LastError = r.IsDBNull(r.GetOrdinal("LastError")) ? null : r.GetString(r.GetOrdinal("LastError")),
             RawConnectionString = r.IsDBNull(r.GetOrdinal("RawConnectionString")) ? null : r.GetString(r.GetOrdinal("RawConnectionString")),
+            Encrypt = HasColumn(r, "Encrypt") && !r.IsDBNull(r.GetOrdinal("Encrypt"))
+                ? r.GetString(r.GetOrdinal("Encrypt")) : "Mandatory",
+            TrustServerCertificate = !HasColumn(r, "TrustServerCertificate") || r.IsDBNull(r.GetOrdinal("TrustServerCertificate"))
+                || r.GetInt32(r.GetOrdinal("TrustServerCertificate")) == 1,
+            RememberPassword = !HasColumn(r, "RememberPassword") || r.IsDBNull(r.GetOrdinal("RememberPassword"))
+                || r.GetInt32(r.GetOrdinal("RememberPassword")) == 1,
         };
+
+        private static bool HasColumn(SqliteDataReader r, string name)
+        {
+            for (int i = 0; i < r.FieldCount; i++)
+                if (string.Equals(r.GetName(i), name, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
     }
 }

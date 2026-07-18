@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:RunCommand.WPF.Converters"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
-        Title="Add Server(s)" Height="560" Width="620"
+        Title="Add Server(s)" Height="680" Width="640"
         WindowStartupLocation="CenterOwner" ResizeMode="CanResize"
-        MinHeight="480" MinWidth="560"
+        MinHeight="480" MinWidth="480"
         TextElement.Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
         FontFamily="{materialDesign:MaterialDesignFont}"
         Background="{DynamicResource MaterialDesign.Brush.Background}">
@@ -22,63 +22,71 @@
 
         <TabControl Grid.Row="0" x:Name="ModeTabs" Style="{StaticResource MaterialDesignFilledTabControl}">
 
-            <!-- Manual entry -->
+            <!-- Manual entry - mirrors SSMS Connection Properties -->
             <TabItem Header="Manual Entry">
-                <Grid Margin="10">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/><RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <TextBox x:Name="NameBox" Grid.Row="1" Margin="0,0,0,8"
-                             materialDesign:HintAssist.Hint="Name"
-                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
-
-                    <Grid Grid.Row="3" Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="80"/></Grid.ColumnDefinitions>
-                        <TextBox x:Name="HostBox" Grid.Column="0" Margin="0,0,4,0"
-                                 materialDesign:HintAssist.Hint="Host / IP (or \instance, or (localdb)\Instance)"
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,10,10,0">
+                    <StackPanel>
+                        <TextBox x:Name="NameBox" Margin="0,0,0,12"
+                                 materialDesign:HintAssist.Hint="Display name"
                                  Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
-                        <TextBox x:Name="PortBox" Grid.Column="1" Text="1433"
-                                 materialDesign:HintAssist.Hint="Port"
+
+                        <TextBox x:Name="HostBox" Margin="0,0,0,12"
+                                 materialDesign:HintAssist.Hint="Server name (e.g. host\instance,49149)"
                                  Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
-                    </Grid>
 
-                    <TextBox x:Name="DatabaseBox" Grid.Row="5" Margin="0,0,0,8"
-                             materialDesign:HintAssist.Hint="Database"
-                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                        <ComboBox x:Name="AuthModeBox" Margin="0,0,0,12"
+                                  materialDesign:HintAssist.Hint="Authentication"
+                                  Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                  SelectedIndex="0"
+                                  SelectionChanged="AuthModeChanged">
+                            <ComboBoxItem Content="SQL Server Authentication"/>
+                            <ComboBoxItem Content="Windows Authentication"/>
+                        </ComboBox>
 
-                    <TextBox x:Name="GroupBox" Grid.Row="7" Margin="0,0,0,8"
-                             materialDesign:HintAssist.Hint="Group / Region"
-                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
-
-                    <StackPanel Grid.Row="8" Orientation="Horizontal" Margin="0,0,0,8">
-                        <CheckBox x:Name="WindowsAuthCheck" Content="Windows Authentication"
-                                  Checked="AuthModeChanged" Unchecked="AuthModeChanged"/>
-                    </StackPanel>
-
-                    <StackPanel Grid.Row="9">
-                        <TextBox x:Name="UserBox" Margin="0,0,0,8"
-                                 materialDesign:HintAssist.Hint="Username"
+                        <TextBox x:Name="UserBox" Margin="0,0,0,12"
+                                 materialDesign:HintAssist.Hint="User name"
                                  Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+
                         <PasswordBox x:Name="PassBox" Margin="0,0,0,8"
                                      materialDesign:HintAssist.Hint="Password"
                                      Style="{StaticResource MaterialDesignOutlinedPasswordBox}"/>
-                        <TextBlock x:Name="TestResultText" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                    </StackPanel>
 
-                    <StackPanel Grid.Row="10" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-                        <Ellipse x:Name="TestDot" Width="12" Height="12" Fill="#9E9E9E" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                        <Button Content="Test Connection" Click="TestConnection_Click"
-                                Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0"/>
-                        <Button Content="Save" Click="Save_Click"
-                                Style="{StaticResource MaterialDesignRaisedButton}" IsDefault="True"/>
+                        <CheckBox x:Name="RememberPasswordCheck" Content="Remember password"
+                                  Style="{StaticResource MaterialDesignCheckBox}"
+                                  IsChecked="True" Margin="0,0,0,12"/>
+
+                        <TextBox x:Name="DatabaseBox" Margin="0,0,0,12"
+                                 materialDesign:HintAssist.Hint="Database name"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+
+                        <TextBox x:Name="GroupBox" Margin="0,0,0,12"
+                                 materialDesign:HintAssist.Hint="Group / Region"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+
+                        <ComboBox x:Name="EncryptBox" Margin="0,0,0,12"
+                                  materialDesign:HintAssist.Hint="Encrypt"
+                                  Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                  SelectedIndex="0">
+                            <ComboBoxItem Content="Mandatory" Tag="Mandatory"/>
+                            <ComboBoxItem Content="Optional" Tag="Optional"/>
+                            <ComboBoxItem Content="Strict" Tag="Strict"/>
+                        </ComboBox>
+
+                        <CheckBox x:Name="TrustServerCertCheck" Content="Trust server certificate"
+                                  Style="{StaticResource MaterialDesignCheckBox}"
+                                  IsChecked="True" Margin="0,0,0,12"/>
+
+                        <TextBlock x:Name="TestResultText" Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,8">
+                            <Ellipse x:Name="TestDot" Width="12" Height="12" Fill="#9E9E9E" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <Button Content="Test Connection" Click="TestConnection_Click"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0"/>
+                            <Button Content="Save" Click="Save_Click"
+                                    Style="{StaticResource MaterialDesignRaisedButton}" IsDefault="True"/>
+                        </StackPanel>
                     </StackPanel>
-                </Grid>
+                </ScrollViewer>
             </TabItem>
 
             <!-- Connection strings -->
@@ -105,17 +113,18 @@
 
                     <Grid Grid.Row="2" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*" MinWidth="120"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBox x:Name="BulkGroupBox" Grid.Column="0" Margin="0,0,8,0"
                                  materialDesign:HintAssist.Hint="Group / Region for all"
                                  Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
-                        <Button Grid.Column="1" Content="Import CSV..." Click="ImportCsv_Click"
-                                Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0"/>
-                        <Button Grid.Column="2" Content="Test All" Click="TestAll_Click"
-                                Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                        <WrapPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="Import CSV..." Click="ImportCsv_Click"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,2,8,2"/>
+                            <Button Content="Test All" Click="TestAll_Click"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,2,0,2"/>
+                        </WrapPanel>
                     </Grid>
 
                     <TextBlock Grid.Row="3" x:Name="ParseSummaryText" Margin="0,0,0,4" Opacity="0.8"/>
@@ -157,7 +166,9 @@
 
         <materialDesign:Snackbar x:Name="DialogSnackbar"
                                  Grid.RowSpan="2"
+                                 Panel.ZIndex="100"
                                  VerticalAlignment="Bottom"
-                                 HorizontalAlignment="Stretch"/>
+                                 HorizontalAlignment="Stretch"
+                                 Margin="8"/>
     </Grid>
 </Window>

@@ -27,8 +27,8 @@ namespace RunCommand.WPF.Views
         public AddServerDialog()
         {
             InitializeComponent();
-            AuthModeChanged(this, null!);
             ParsedList.ItemsSource = ParsedEntries;
+            AuthModeChanged(AuthModeBox, null!);
 
             var dialogQueue = new SnackbarMessageQueue(TimeSpan.FromSeconds(4));
             DialogSnackbar.MessageQueue = dialogQueue;
@@ -38,30 +38,49 @@ namespace RunCommand.WPF.Views
 
         // ===================== Manual entry tab =====================
 
-        private void AuthModeChanged(object sender, RoutedEventArgs e)
+        private void AuthModeChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            bool windowsAuth = WindowsAuthCheck.IsChecked == true;
-            UserBox.Visibility = windowsAuth ? Visibility.Collapsed : Visibility.Visible;
-            PassBox.Visibility = windowsAuth ? Visibility.Collapsed : Visibility.Visible;
+            if (UserBox is null || PassBox is null || RememberPasswordCheck is null) return;
+
+            bool windowsAuth = AuthModeBox.SelectedIndex == 1;
+            var sqlAuthVisibility = windowsAuth ? Visibility.Collapsed : Visibility.Visible;
+            UserBox.Visibility = sqlAuthVisibility;
+            PassBox.Visibility = sqlAuthVisibility;
+            RememberPasswordCheck.Visibility = sqlAuthVisibility;
         }
 
-        private ServerConnectionInfo BuildFromForm() => new()
+        private ServerConnectionInfo BuildFromForm(bool includePasswordForConnect = true)
         {
-            Name = NameBox.Text.Trim(),
-            HostName = HostBox.Text.Trim(),
-            Port = int.TryParse(PortBox.Text, out var p) ? p : 1433,
-            DatabaseName = DatabaseBox.Text.Trim(),
-            Group = GroupBox.Text.Trim(),
-            UseWindowsAuth = WindowsAuthCheck.IsChecked == true,
-            UserName = UserBox.Text.Trim(),
-            EncryptedPassword = SecureStringHelper.Protect(PassBox.Password)
-        };
+            bool windowsAuth = AuthModeBox.SelectedIndex == 1;
+            bool remember = RememberPasswordCheck.IsChecked == true;
+            string encrypt = (EncryptBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string
+                             ?? "Mandatory";
+
+            string? encryptedPassword = null;
+            if (!windowsAuth && !string.IsNullOrEmpty(PassBox.Password) && (includePasswordForConnect || remember))
+                encryptedPassword = SecureStringHelper.Protect(PassBox.Password);
+
+            return new ServerConnectionInfo
+            {
+                Name = NameBox.Text.Trim(),
+                HostName = HostBox.Text.Trim(),
+                Port = 1433,
+                DatabaseName = DatabaseBox.Text.Trim(),
+                Group = GroupBox.Text.Trim(),
+                UseWindowsAuth = windowsAuth,
+                UserName = windowsAuth ? null : UserBox.Text.Trim(),
+                RememberPassword = !windowsAuth && remember,
+                EncryptedPassword = encryptedPassword,
+                Encrypt = encrypt,
+                TrustServerCertificate = TrustServerCertCheck.IsChecked == true
+            };
+        }
 
         private async void TestConnection_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                var candidate = BuildFromForm();
+                var candidate = BuildFromForm(includePasswordForConnect: true);
 
                 TestDot.Fill = new SolidColorBrush(Color.FromRgb(0xE8, 0xA6, 0x1E));
                 TestResultText.Text = "Testing connection...";
@@ -98,11 +117,15 @@ namespace RunCommand.WPF.Views
         {
             if (string.IsNullOrWhiteSpace(NameBox.Text) || string.IsNullOrWhiteSpace(HostBox.Text))
             {
-                ShowError("Name and Host are required.");
+                ShowError("Display name and Server name are required.");
                 return;
             }
 
-            Results.Add(BuildFromForm());
+            var info = BuildFromForm(includePasswordForConnect: true);
+            if (!info.RememberPassword)
+                info.EncryptedPassword = null;
+
+            Results.Add(info);
             ShowSuccess("Server saved.");
             DialogResult = true;
         }

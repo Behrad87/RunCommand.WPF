@@ -5,7 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         mc:Ignorable="d"
-        Title="RunCommand - Multi-Server Query" Height="800" Width="1300"
+        Title="RunCommand - Multi-Server Query"
+        Height="800" Width="1300"
+        MinHeight="520" MinWidth="800"
         WindowStartupLocation="CenterScreen"
         TextElement.Foreground="{DynamicResource MaterialDesign.Brush.Foreground}"
         TextElement.FontWeight="Regular"
@@ -17,9 +19,10 @@
             <Frame x:Name="MainFrame" NavigationUIVisibility="Hidden"/>
 
             <materialDesign:Snackbar x:Name="AppSnackbar"
-                                     MessageQueue="{Binding MessageQueue, ElementName=AppSnackbar}"
+                                     Panel.ZIndex="100"
                                      VerticalAlignment="Bottom"
-                                     HorizontalAlignment="Stretch"/>
+                                     HorizontalAlignment="Stretch"
+                                     Margin="16"/>
         </Grid>
     </materialDesign:DialogHost>
 </Window>

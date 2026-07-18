@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 using MaterialDesignThemes.Wpf;
 
@@ -24,15 +25,15 @@ namespace RunCommand.WPF.Infrastructure
         public static void RestoreQueue(SnackbarMessageQueue? queue) => _queue = queue;
 
         public static void ShowSuccess(string message) =>
-            Enqueue(message, PackIconKind.CheckCircle, TimeSpan.FromSeconds(4));
+            Enqueue(message, PackIconKind.CheckCircle, "#2EA04A", TimeSpan.FromSeconds(4));
 
         public static void ShowError(string message) =>
-            Enqueue(message, PackIconKind.AlertCircle, TimeSpan.FromSeconds(8));
+            Enqueue(message, PackIconKind.AlertCircle, "#D93333", TimeSpan.FromSeconds(8));
 
         public static void ShowInfo(string message) =>
-            Enqueue(message, PackIconKind.Information, TimeSpan.FromSeconds(5));
+            Enqueue(message, PackIconKind.InformationOutline, "#1565C0", TimeSpan.FromSeconds(5));
 
-        private static void Enqueue(string message, PackIconKind icon, TimeSpan duration)
+        private static void Enqueue(string message, PackIconKind icon, string iconColor, TimeSpan duration)
         {
             if (_queue is null || string.IsNullOrWhiteSpace(message))
                 return;
@@ -42,20 +43,27 @@ namespace RunCommand.WPF.Infrastructure
                 var queue = _queue;
                 if (queue is null) return;
 
-                var content = new StackPanel { Orientation = Orientation.Horizontal };
+                var brush = (Brush)new BrushConverter().ConvertFromString(iconColor)!;
+                var content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    MaxWidth = 720
+                };
                 content.Children.Add(new PackIcon
                 {
                     Kind = icon,
-                    Width = 20,
-                    Height = 20,
+                    Width = 22,
+                    Height = 22,
+                    Foreground = brush,
                     VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(0, 0, 10, 0)
+                    Margin = new Thickness(0, 0, 12, 0)
                 });
                 content.Children.Add(new TextBlock
                 {
                     Text = message,
                     VerticalAlignment = VerticalAlignment.Center,
-                    TextWrapping = TextWrapping.Wrap
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 640
                 });
 
                 queue.Enqueue(content, null, null, null, false, true, duration);

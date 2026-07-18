@@ -13,14 +13,19 @@ namespace RunCommand.WPF.Models
         public Guid Id { get; set; } = Guid.NewGuid();
 
         public string Name { get; set; } = string.Empty;       // e.g. "Store 0142 - Tehran"
-        public string HostName { get; set; } = string.Empty;   // display value - "Data Source" as typed (host, host,port, host\instance, or (localdb)\Instance)
-        public int Port { get; set; } = 1433;                  // only used when building from parts (manual entry); ignored when RawConnectionString is set
+        public string HostName { get; set; } = string.Empty;   // Server name / Data Source (host, host,port, host\instance, or (localdb)\Instance)
+        public int Port { get; set; } = 1433;                  // only used when HostName has no embedded port; ignored when RawConnectionString is set
         public string DatabaseName { get; set; } = string.Empty;
         public string Group { get; set; } = string.Empty;      // region / district, useful for filtering thousands of rows
 
         public bool UseWindowsAuth { get; set; } = false;
         public string? UserName { get; set; }
         public string? EncryptedPassword { get; set; }         // DPAPI-protected, see SecureStringHelper
+        public bool RememberPassword { get; set; } = true;
+
+        /// <summary>Encrypt option: Mandatory, Optional, or Strict (matches SqlConnectionEncryptOption).</summary>
+        public string Encrypt { get; set; } = "Mandatory";
+        public bool TrustServerCertificate { get; set; } = true;
 
         /// <summary>
         /// When set, this is the source of truth for connecting - added so a full
@@ -59,10 +64,11 @@ namespace RunCommand.WPF.Models
 
             var builder = new SqlConnectionStringBuilder
             {
-                DataSource = Port is <= 0 or 1433 ? HostName : $"{HostName},{Port}",
+                DataSource = BuildDataSource(),
                 InitialCatalog = DatabaseName,
                 ConnectTimeout = connectTimeoutSeconds,
-                TrustServerCertificate = true
+                Encrypt = ParseEncrypt(Encrypt),
+                TrustServerCertificate = TrustServerCertificate
             };
 
             if (UseWindowsAuth)
@@ -77,5 +83,22 @@ namespace RunCommand.WPF.Models
 
             return builder.ConnectionString;
         }
+
+        private string BuildDataSource()
+        {
+            // Server name may already include instance and/or port, e.g. host\Node,49149
+            if (string.IsNullOrWhiteSpace(HostName)) return string.Empty;
+            if (HostName.Contains(',') || Port <= 0 || Port == 1433)
+                return HostName;
+            return $"{HostName},{Port}";
+        }
+
+        public static SqlConnectionEncryptOption ParseEncrypt(string? value) =>
+            (value ?? "Mandatory").Trim().ToLowerInvariant() switch
+            {
+                "optional" or "false" or "no" => SqlConnectionEncryptOption.Optional,
+                "strict" => SqlConnectionEncryptOption.Strict,
+                _ => SqlConnectionEncryptOption.Mandatory
+            };
     }
 }
